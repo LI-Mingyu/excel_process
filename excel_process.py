@@ -23,7 +23,11 @@ def run_code(lang: str, code: str, libraries: Optional[List] = None) -> str:
     :return: The output of the code.
     """
     with SandboxSession(lang=lang, verbose=False) as session:
-        return session.run(code, libraries).text
+        result = session.run(code, libraries).text
+        # 确保结果不为空
+        if not result or result.strip() == '':
+            return "执行成功，但没有输出结果。请尝试添加print语句来显示结果。"
+        return result
 
 def copy_file_to_sandbox(local_path: str, sandbox_path: str) -> str:
     """
@@ -72,7 +76,7 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
                     "properties": {
                         "lang": {
                             "type": "string",
-                            "description": "The language of the code."
+                            "description": "The language of the code. Must be one of ['python', 'java', 'javascript', 'cpp', 'go', 'ruby']"
                         },
                         "code": {
                             "type": "string",
@@ -159,6 +163,8 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
     print("===========================\n")
     
     # 循环处理工具调用
+    generated_files = []  # 用于跟踪生成的文件
+    
     while True:
         response = client.chat.completions.create(
             model="qwen-max",  # 可以根据需要更换为其他模型
@@ -225,8 +231,36 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
             # 继续对话
             continue
         else:
-            # 没有工具调用，返回最终结果
-            return response_message.content
+            # 没有工具调用，处理生成的文件并返回最终结果
+            final_result = response_message.content
+            
+            # 如果有生成的文件，将它们复制到本地并添加到结果中
+            if generated_files:
+                print("\n===== 处理生成的文件 =====")
+                local_files = []
+                
+                for sandbox_file in generated_files:
+                    # 提取文件名
+                    file_name = os.path.basename(sandbox_file)
+                    # 创建本地目标路径
+                    local_file = os.path.join(os.getcwd(), "output_" + file_name)
+                    
+                    # 复制文件到本地
+                    try:
+                        copy_result = copy_file_from_sandbox(sandbox_file, local_file)
+                        print(copy_result)
+                        local_files.append(local_file)
+                    except Exception as e:
+                        print(f"复制文件失败: {str(e)}")
+                
+                # 将本地文件路径添加到结果中
+                if local_files:
+                    file_paths_text = "\n\n生成的文件已复制到本地:\n" + "\n".join(local_files)
+                    final_result += file_paths_text
+                
+                print("===========================\n")
+            
+            return final_result
 
 if __name__ == "__main__":
     print("Excel 文件处理工具")
