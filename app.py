@@ -7,6 +7,7 @@ from typing import Optional, List
 from dotenv import load_dotenv
 from llm_sandbox import SandboxSession
 from openai import OpenAI
+from logger import log_model_request, log_model_response, log_tool_result
 
 # 加载环境变量
 load_dotenv()
@@ -164,8 +165,26 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
         copy_result = copy_file_to_sandbox(excel_file_path, sandbox_dir)
         st.info(copy_result)
         
-        # 告诉模型Excel文件的位置
-        messages[0]["content"] += f"\n\nExcel文件已上传到沙盒环境，路径为: {sandbox_excel_path}"
+        # 提取Excel文件的前几行数据
+        try:
+            # 读取Excel文件
+            df = pd.read_excel(excel_file_path)
+            # 获取前5行数据
+            preview_rows = min(5, len(df))
+            excel_preview = df.head(preview_rows).to_string()
+            # 获取列名信息
+            columns_info = "列名: " + ", ".join(df.columns.tolist())
+            # 获取数据类型信息
+            dtypes_info = "数据类型:\n" + df.dtypes.to_string()
+            # 构建Excel预览信息
+            excel_info = f"\n\nExcel文件预览信息:\n文件名: {excel_filename}\n总行数: {len(df)}\n总列数: {df.shape[1]}\n{columns_info}\n\n前{preview_rows}行数据预览:\n{excel_preview}\n\n{dtypes_info}"
+            
+            # 告诉模型Excel文件的位置和预览信息
+            messages[0]["content"] += f"\n\nExcel文件已上传到沙盒环境，路径为: {sandbox_excel_path}{excel_info}"
+        except Exception as e:
+            # 如果提取失败，只告诉模型文件位置
+            st.warning(f"无法提取Excel预览: {str(e)}")
+            messages[0]["content"] += f"\n\nExcel文件已上传到沙盒环境，路径为: {sandbox_excel_path}"
     
     # 创建结果显示区域的容器，以便实时更新内容
     result_container = st.container()
@@ -228,6 +247,9 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
             # 更新状态消息
             status.update(label=f"步骤 {step_counter}: 正在与AI模型交互...", state="running")
             
+            # 记录发送给模型的请求
+            log_model_request(messages, model="qwen-max")
+            
             response = client.chat.completions.create(
                 model="qwen-max",  # 可以根据需要更换为其他模型
                 messages=messages,
@@ -237,6 +259,9 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
             
             response_message = response.choices[0].message
             messages.append(response_message)
+            
+            # 记录模型的响应
+            log_model_response(response_message, model="qwen-max")
             
             # 记录大模型的输出并实时显示
             if response_message.content:
@@ -285,6 +310,9 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
                         all_outputs.append({"type": "info", "content": result})
                         generated_files.append(local_path)
                         update_results()  # 实时更新显示
+                    
+                    # 记录工具执行结果
+                    log_tool_result(function_name, result)
                     
                     # 将工具执行结果添加到消息中
                     tool_message = {
