@@ -147,9 +147,11 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
             "role": "system", 
             "content": """你是一位Excel数据分析专家，擅长使用Python进行数据处理和可视化。请根据用户的需求，生成并执行相应的代码来分析Excel数据。
             所有的数据分析都应当在沙盒中进行，为了捕获程序运行的状态和结果，在代码中用print()语句把你想了解的信息输出。
-            如果涉及到生成图片或产生其他文件，除了在界面上渲染显示外，还应将其从沙盒环境复制到外部存储。"""
+            如果涉及到生成图片或产生其他文件，除了在界面上渲染显示外，还应将其从沙盒环境复制到外部存储。
+            如果要作图，由于中文字体可能出现显示问题，所以图片中文字一律使用英文。"""
         },
-        {"role": "user", "content": user_input}
+        {"role": "user", "content": user_input},
+        {"role": "assistant", "content": "好的，请稍等，我正在分析您的需求并生成代码。"},
     ]
     
     # 如果提供了Excel文件路径，先将其复制到沙盒中
@@ -191,14 +193,16 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
     
     # 创建进度指示器
     with st.status("正在处理您的请求...", expanded=True) as status:
-        st.write("正在分析您的需求并生成代码...")
+        # 初始状态消息，将在流程结束时被清除
+        status_message = st.empty()
+        status_message.write("正在分析您的需求并生成代码...")
         
         # 循环处理工具调用
         generated_files = []  # 用于跟踪生成的文件
         all_outputs = []  # 存储所有输出
         step_counter = 1  # 用于跟踪步骤编号
         
-        # 在容器中预先创建标题，避免重复
+        # 在容器（streamlit概念）中预先创建标题，避免重复
         with result_container:
             st.subheader("处理进度与结果", divider="rainbow")
             # 创建各种输出的占位符
@@ -226,10 +230,14 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
                             st.markdown(output["content"])
                     elif output["type"] == "code":
                         with st.container():
-                            st.code(output["content"], language=output["lang"])
+                            # 使用expander组件包装代码块，默认折叠状态
+                            with st.expander("查看代码", expanded=False):
+                                st.code(output["content"], language=output["lang"])
                     elif output["type"] == "result":
                         with st.container():
-                            st.text_area("执行结果", output["content"], height=200, key=f"result_{unique_key}")
+                            # 使用expander组件包装执行结果，默认折叠状态
+                            with st.expander("查看执行结果", expanded=False):
+                                st.text_area("执行结果", output["content"], height=200, key=f"result_{unique_key}")
                     elif output["type"] == "info":
                         with st.container():
                             st.info(output["content"])
@@ -336,6 +344,8 @@ def run_agent(user_input: str, excel_file_path: Optional[str] = None):
                     all_outputs.append({"type": "files", "content": generated_files})
                     update_results()  # 实时更新显示
                 
+                # 清除初始状态消息并更新状态为完成
+                status_message.empty()
                 status.update(label="处理完成！", state="complete")
                 break
     
