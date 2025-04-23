@@ -30,7 +30,6 @@ st.title("Excel数据分析助手")
 st.markdown("上传Excel文件并使用自然语言描述您的分析需求，AI将为您生成并执行分析代码。")
 
 # 定义函数
-# 定义函数
 def run_code(lang: str, code: str, libraries: Optional[List] = None) -> str:
     """
     在沙盒环境中运行代码

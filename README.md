@@ -43,7 +43,7 @@
 - Streamlit: 用于构建Web界面
 - Pandas: 用于数据处理和分析
 - OpenAI API: 用于理解用户需求并生成分析代码
-- E2B Sandbox: 用于安全执行生成的代码
+- llm-sandbox: 用于安全执行生成的代码
 
 ## 注意事项
 
